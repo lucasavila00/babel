@@ -539,7 +539,8 @@ export type BinaryOperator =
   | "^"
   | "&"
   | "in"
-  | "instanceof";
+  | "instanceof"
+  | "is";
 
 export interface AssignmentExpression extends NodeBase {
   type: "AssignmentExpression";
@@ -570,6 +571,72 @@ export interface LogicalExpression extends NodeBase {
 }
 
 export type LogicalOperator = "||" | "&&";
+
+export type BooleanMatcherOperator = "and" | "or";
+export interface BooleanMatcher extends NodeBase {
+  type: "BooleanMatcher";
+  left: MatchPattern;
+  right: MatchPattern;
+  operator: BooleanMatcherOperator;
+}
+
+export interface MatchNotPattern extends NodeBase {
+  type: "MatchNotPattern";
+  argument: MatchPattern;
+}
+
+export interface ArrayMatchPattern extends NodeBase {
+  type: "ArrayMatchPattern";
+  elements: MatchPattern[];
+}
+
+export interface EmptyRestMatchElement extends NodeBase {
+  type: "EmptyRestMatchElement";
+}
+
+export interface BindingRestMatchElement extends NodeBase {
+  type: "BindingRestMatchElement";
+  identifier: Identifier;
+  kind: "var" | "let" | "const";
+}
+
+export interface BindingMatchPattern extends NodeBase {
+  type: "BindingMatchPattern";
+  identifier: Identifier;
+  kind: "var" | "let" | "const";
+}
+
+export interface AssignmentMatchProperty extends ObjectProperty {
+  value: MatchPattern;
+}
+
+export interface ObjectMatchPattern extends NodeBase {
+  type: "ObjectMatchPattern";
+  properties: Array<AssignmentMatchProperty | BindingRestMatchElement>;
+}
+
+export type MatchPattern =
+  | NumericLiteral
+  | MatchNotPattern
+  | BooleanMatcher
+  | UnaryExpression
+  | BigIntLiteral
+  | StringLiteral
+  | NullLiteral
+  | BooleanLiteral
+  | Identifier
+  | ArrayMatchPattern
+  | EmptyRestMatchElement
+  | BindingRestMatchElement
+  | ObjectMatchPattern
+  | BindingMatchPattern;
+
+export interface IsExpression extends NodeBase {
+  type: "IsExpression";
+  operator: "is";
+  left: Expression;
+  right: MatchPattern;
+}
 
 export interface SpreadElement extends NodeBase {
   type: "SpreadElement";

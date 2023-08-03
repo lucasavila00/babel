@@ -405,6 +405,200 @@ export default abstract class ExpressionParser extends LValParser {
     return this.parseExprOp(expr, startLoc, -1);
   }
 
+  parseSimpleUnaryExpression(): N.UnaryExpression {
+    const node = this.startNode<N.UnaryExpression>();
+    node.operator = this.state.value;
+    this.next(); // skip operator (+/-)
+    node.prefix = true;
+    switch (this.state.type) {
+      case tt.num:
+        node.argument = this.parseNumericLiteral(this.state.value);
+        break;
+      case tt.bigint:
+        node.argument = this.parseBigIntLiteral(this.state.value);
+        break;
+      default:
+        if (this.isContextual(Infinity)) {
+          node.argument = this.parseIdentifier();
+          break;
+        }
+        throw this.unexpected();
+    }
+    return this.finishNode(node, "UnaryExpression");
+  }
+
+  parseRestMatchElement(
+    this: Parser,
+  ): N.EmptyRestMatchElement | N.BindingRestMatchElement {
+    const startLoc = this.state.startLoc;
+    this.expect(tt.ellipsis);
+    if (this.match(tt._const) || this.match(tt._let) || this.match(tt._var)) {
+      return this.parseBindingRestMatchElement(startLoc);
+    }
+    const node = this.startNodeAt<N.EmptyRestMatchElement>(startLoc);
+    return this.finishNode(node, "EmptyRestMatchElement");
+  }
+
+  parseBindingRestMatchElement(
+    this: Parser,
+    startLoc: Position,
+  ): N.BindingRestMatchElement {
+    const kind = this.state.value;
+    this.next();
+    const node = this.startNodeAt<N.BindingRestMatchElement>(startLoc);
+    node.identifier = this.parseIdentifier();
+    node.kind = kind;
+    return this.finishNode(node, "BindingRestMatchElement");
+  }
+
+  parseArrayMatchPattern(this: Parser): N.ArrayMatchPattern {
+    const node = this.startNode<N.ArrayMatchPattern>();
+    this.expect(tt.bracketL);
+
+    const elements: N.MatchPattern[] = [];
+
+    while (!this.eat(tt.bracketR)) {
+      if (this.match(tt.ellipsis)) {
+        elements.push(this.parseRestMatchElement());
+      } else {
+        elements.push(this.parseBinaryPattern());
+      }
+      this.eat(tt.comma);
+    }
+
+    node.elements = elements;
+    return this.finishNode(node, "ArrayMatchPattern");
+  }
+
+  parseObjectMatchPattern(this: Parser): N.ObjectMatchPattern {
+    const node1 = this.startNode<N.ObjectMatchPattern>();
+    this.expect(tt.braceL);
+    const properties: (
+      | N.AssignmentMatchProperty
+      | N.BindingRestMatchElement
+    )[] = [];
+    while (!this.eat(tt.braceR)) {
+      if (this.match(tt.ellipsis)) {
+        const startLoc = this.state.startLoc;
+        this.expect(tt.ellipsis);
+        if (
+          this.match(tt._const) ||
+          this.match(tt._let) ||
+          this.match(tt._var)
+        ) {
+          properties.push(this.parseBindingRestMatchElement(startLoc));
+        } else {
+          this.raise(Errors.RestNeedsLetMatchingObject, {
+            at: node1,
+          });
+        }
+        this.checkCommaAfterRest(charCodes.rightCurlyBrace);
+        this.expect(tt.braceR);
+        break;
+      }
+      const node = this.startNode<N.AssignmentMatchProperty>();
+      node.method = false;
+      this.parsePropertyName(node);
+      if (this.eat(tt.colon)) {
+        node.value = this.parseBinaryPattern();
+      }
+      const node2 = this.finishNode(node, "ObjectProperty");
+      properties.push(node2);
+      this.eat(tt.comma);
+    }
+
+    node1.properties = properties;
+    return this.finishNode(node1, "ObjectMatchPattern");
+  }
+
+  parseBindingPattern(
+    this: Parser,
+    kind: "const" | "var" | "let",
+  ): N.BindingMatchPattern {
+    const node = this.startNode<N.BindingMatchPattern>();
+    node.identifier = this.parseIdentifier();
+    node.kind = kind;
+    this.next();
+    return this.finishNode(node, "BindingMatchPattern");
+  }
+
+  parsePattern(this: Parser): N.MatchPattern {
+    switch (this.state.type) {
+      // case tt.slash:
+      // case tt.slashAssign:
+      //   this.readRegexp();
+      //   return this.parseRegExpLiteral(this.state.value);
+      case tt._const:
+      case tt._var:
+      case tt._let:
+        return this.parseBindingPattern(this.state.value);
+      case tt.num:
+        return this.parseNumericLiteral(this.state.value);
+      case tt.bigint:
+        return this.parseBigIntLiteral(this.state.value);
+      case tt.string:
+        return this.parseStringLiteral(this.state.value);
+      case tt._null:
+        return this.parseNullLiteral();
+      case tt._true:
+        return this.parseBooleanLiteral(true);
+      case tt._false:
+        return this.parseBooleanLiteral(false);
+      case tt.braceL:
+        return this.parseObjectMatchPattern();
+      case tt.bracketL:
+        return this.parseArrayMatchPattern();
+      case tt.plusMin:
+        return this.parseSimpleUnaryExpression();
+      case tt.parenL: {
+        this.next();
+        const node = this.parseBinaryPattern(undefined);
+        this.expect(tt.parenR);
+        return node;
+      }
+      case tt.name: {
+        if (this.state.value === "not") {
+          this.next();
+          const node = this.startNode<N.MatchNotPattern>();
+          const right = this.parseBinaryPattern(undefined);
+          node.argument = right;
+          return this.finishNode(node, "MatchNotPattern");
+        }
+        return this.parseIdentifier();
+      }
+      default:
+        throw this.unexpected();
+    }
+  }
+
+  parseBinaryPattern(
+    this: Parser,
+    boolMatcherFound?: "and" | "or" | undefined,
+  ): N.MatchPattern {
+    const left = this.parsePattern();
+    const op = this.state.type;
+
+    if (op === tt.name) {
+      const value = this.state.value;
+      if (value === "or" || value === "and") {
+        if (boolMatcherFound != null && boolMatcherFound != value) {
+          this.raise(Errors.CannotCombineBooleanMatching, {
+            at: left,
+          });
+        }
+        this.next();
+        const node = this.startNodeAt<N.BooleanMatcher>(this.state.startLoc);
+        const right = this.parseBinaryPattern(value);
+        node.left = left;
+        node.right = right;
+        node.operator = value;
+        return this.finishNode(node, "BooleanMatcher");
+      }
+    }
+
+    return left;
+  }
+
   // Parse binary operators with the operator precedence parsing
   // algorithm. `left` is the left-hand side of the operator.
   // `minPrec` provides context that allows the function to stop and
@@ -439,6 +633,7 @@ export default abstract class ExpressionParser extends LValParser {
     }
 
     const op = this.state.type;
+
     if (tokenIsOperator(op) && (this.prodParam.hasIn || !this.match(tt._in))) {
       let prec = tokenOperatorPrecedence(op);
       if (prec > minPrec) {
@@ -449,9 +644,9 @@ export default abstract class ExpressionParser extends LValParser {
           }
           this.checkPipelineAtInfixOperator(left, leftStartLoc);
         }
-        const node = this.startNodeAt<N.LogicalExpression | N.BinaryExpression>(
-          leftStartLoc,
-        );
+        const node = this.startNodeAt<
+          N.LogicalExpression | N.BinaryExpression | N.IsExpression
+        >(leftStartLoc);
         node.left = left;
         node.operator = this.state.value;
 
@@ -477,11 +672,22 @@ export default abstract class ExpressionParser extends LValParser {
           }
         }
 
-        node.right = this.parseExprOpRightExpr(op, prec);
-        const finishedNode = this.finishNode(
-          node,
-          logical || coalesce ? "LogicalExpression" : "BinaryExpression",
-        );
+        let finishedNode:
+          | N.LogicalExpression
+          | N.BinaryExpression
+          | N.IsExpression;
+
+        if (op === tt._is) {
+          node.right = this.parseBinaryPattern(undefined);
+          finishedNode = this.finishNode(node, "IsExpression");
+        } else {
+          node.right = this.parseExprOpRightExpr(op, prec);
+          finishedNode = this.finishNode(
+            node,
+            logical || coalesce ? "LogicalExpression" : "BinaryExpression",
+          );
+        }
+
         /* this check is for all ?? operators
          * a ?? b && c for this example
          * when op is coalesce and nextOp is logical (&&), throw at the pos of nextOp that it can not be mixed.
