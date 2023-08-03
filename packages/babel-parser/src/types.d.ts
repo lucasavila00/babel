@@ -585,6 +585,36 @@ export interface MatchNotPattern extends NodeBase {
   argument: MatchPattern;
 }
 
+export interface ArrayMatchPattern extends NodeBase {
+  type: "ArrayMatchPattern";
+  elements: MatchPattern[];
+}
+
+export interface EmptyRestMatchElement extends NodeBase {
+  type: "EmptyRestMatchElement";
+}
+
+export interface BindingRestMatchElement extends NodeBase {
+  type: "BindingRestMatchElement";
+  identifier: Identifier;
+  kind: "var" | "let" | "const";
+}
+
+export interface BindingMatchPattern extends NodeBase {
+  type: "BindingMatchPattern";
+  identifier: Identifier;
+  kind: "var" | "let" | "const";
+}
+
+export interface AssignmentMatchProperty extends ObjectProperty {
+  value: MatchPattern;
+}
+
+export interface ObjectMatchPattern extends NodeBase {
+  type: "ObjectMatchPattern";
+  properties: Array<AssignmentMatchProperty | BindingRestMatchElement>;
+}
+
 export type MatchPattern =
   | NumericLiteral
   | MatchNotPattern
@@ -594,7 +624,12 @@ export type MatchPattern =
   | StringLiteral
   | NullLiteral
   | BooleanLiteral
-  | Identifier;
+  | Identifier
+  | ArrayMatchPattern
+  | EmptyRestMatchElement
+  | BindingRestMatchElement
+  | ObjectMatchPattern
+  | BindingMatchPattern;
 
 export interface IsExpression extends NodeBase {
   type: "IsExpression";

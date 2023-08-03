@@ -427,12 +427,111 @@ export default abstract class ExpressionParser extends LValParser {
     return this.finishNode(node, "UnaryExpression");
   }
 
+  parseRestMatchElement(
+    this: Parser,
+  ): N.EmptyRestMatchElement | N.BindingRestMatchElement {
+    const startLoc = this.state.startLoc;
+    this.expect(tt.ellipsis);
+    if (this.match(tt._const) || this.match(tt._let) || this.match(tt._var)) {
+      return this.parseBindingRestMatchElement(startLoc);
+    }
+    const node = this.startNodeAt<N.EmptyRestMatchElement>(startLoc);
+    return this.finishNode(node, "EmptyRestMatchElement");
+  }
+
+  parseBindingRestMatchElement(
+    this: Parser,
+    startLoc: Position,
+  ): N.BindingRestMatchElement {
+    const kind = this.state.value;
+    this.next();
+    const node = this.startNodeAt<N.BindingRestMatchElement>(startLoc);
+    node.identifier = this.parseIdentifier();
+    node.kind = kind;
+    return this.finishNode(node, "BindingRestMatchElement");
+  }
+
+  parseArrayMatchPattern(this: Parser): N.ArrayMatchPattern {
+    const node = this.startNode<N.ArrayMatchPattern>();
+    this.expect(tt.bracketL);
+
+    const elements: N.MatchPattern[] = [];
+
+    while (!this.eat(tt.bracketR)) {
+      if (this.match(tt.ellipsis)) {
+        elements.push(this.parseRestMatchElement());
+      } else {
+        elements.push(this.parseBinaryPattern());
+      }
+      this.eat(tt.comma);
+    }
+
+    node.elements = elements;
+    return this.finishNode(node, "ArrayMatchPattern");
+  }
+
+  parseObjectMatchPattern(this: Parser): N.ObjectMatchPattern {
+    const node1 = this.startNode<N.ObjectMatchPattern>();
+    this.expect(tt.braceL);
+    const properties: (
+      | N.AssignmentMatchProperty
+      | N.BindingRestMatchElement
+    )[] = [];
+    while (!this.eat(tt.braceR)) {
+      if (this.match(tt.ellipsis)) {
+        const startLoc = this.state.startLoc;
+        this.expect(tt.ellipsis);
+        if (
+          this.match(tt._const) ||
+          this.match(tt._let) ||
+          this.match(tt._var)
+        ) {
+          properties.push(this.parseBindingRestMatchElement(startLoc));
+        } else {
+          this.raise(Errors.RestNeedsLetMatchingObject, {
+            at: node1,
+          });
+        }
+        this.checkCommaAfterRest(charCodes.rightCurlyBrace);
+        this.expect(tt.braceR);
+        break;
+      }
+      const node = this.startNode<N.AssignmentMatchProperty>();
+      node.method = false;
+      this.parsePropertyName(node);
+      if (this.eat(tt.colon)) {
+        node.value = this.parseBinaryPattern();
+      }
+      const node2 = this.finishNode(node, "ObjectProperty");
+      properties.push(node2);
+      this.eat(tt.comma);
+    }
+
+    node1.properties = properties;
+    return this.finishNode(node1, "ObjectMatchPattern");
+  }
+
+  parseBindingPattern(
+    this: Parser,
+    kind: "const" | "var" | "let",
+  ): N.BindingMatchPattern {
+    const node = this.startNode<N.BindingMatchPattern>();
+    node.identifier = this.parseIdentifier();
+    node.kind = kind;
+    this.next();
+    return this.finishNode(node, "BindingMatchPattern");
+  }
+
   parsePattern(this: Parser): N.MatchPattern {
     switch (this.state.type) {
       // case tt.slash:
       // case tt.slashAssign:
       //   this.readRegexp();
       //   return this.parseRegExpLiteral(this.state.value);
+      case tt._const:
+      case tt._var:
+      case tt._let:
+        return this.parseBindingPattern(this.state.value);
       case tt.num:
         return this.parseNumericLiteral(this.state.value);
       case tt.bigint:
@@ -445,40 +544,36 @@ export default abstract class ExpressionParser extends LValParser {
         return this.parseBooleanLiteral(true);
       case tt._false:
         return this.parseBooleanLiteral(false);
-      // case tt.braceL:
-      //   return this.parseObjectMatchPattern();
-      // case tt.bracketL:
-      //   return this.parseArrayMatchPattern();
+      case tt.braceL:
+        return this.parseObjectMatchPattern();
+      case tt.bracketL:
+        return this.parseArrayMatchPattern();
       case tt.plusMin:
         return this.parseSimpleUnaryExpression();
       case tt.parenL: {
         this.next();
-        const node = this.parseCombinedPattern(undefined);
-        const didEat = this.eat(tt.parenR);
-        if (!didEat) {
-          this.raise(Errors.UnexpectedToken, { at: node });
-        }
+        const node = this.parseBinaryPattern(undefined);
+        this.expect(tt.parenR);
         return node;
       }
       case tt.name: {
         if (this.state.value === "not") {
           this.next();
-          const node = this.startNodeAt<N.MatchNotPattern>(this.state.startLoc);
-          const right = this.parseCombinedPattern(undefined);
+          const node = this.startNode<N.MatchNotPattern>();
+          const right = this.parseBinaryPattern(undefined);
           node.argument = right;
           return this.finishNode(node, "MatchNotPattern");
         }
         return this.parseIdentifier();
       }
-      //   return this.parseExpressionMatchPattern();
       default:
         throw this.unexpected();
     }
   }
 
-  parseCombinedPattern(
+  parseBinaryPattern(
     this: Parser,
-    boolMatcherFound: "and" | "or" | undefined,
+    boolMatcherFound?: "and" | "or" | undefined,
   ): N.MatchPattern {
     const left = this.parsePattern();
     const op = this.state.type;
@@ -493,7 +588,7 @@ export default abstract class ExpressionParser extends LValParser {
         }
         this.next();
         const node = this.startNodeAt<N.BooleanMatcher>(this.state.startLoc);
-        const right = this.parseCombinedPattern(value);
+        const right = this.parseBinaryPattern(value);
         node.left = left;
         node.right = right;
         node.operator = value;
@@ -583,7 +678,7 @@ export default abstract class ExpressionParser extends LValParser {
           | N.IsExpression;
 
         if (op === tt._is) {
-          node.right = this.parseCombinedPattern(undefined);
+          node.right = this.parseBinaryPattern(undefined);
           finishedNode = this.finishNode(node, "IsExpression");
         } else {
           node.right = this.parseExprOpRightExpr(op, prec);

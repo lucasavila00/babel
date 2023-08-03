@@ -2,7 +2,7 @@ import { parse } from "../lib/index.js";
 
 it("works1", function () {
   const code = `
-a is undefined;
+a is [let b, let c];
 `;
   const res = parse(code, {
     errorRecovery: false,
@@ -13,15 +13,14 @@ a is undefined;
 /*
 
 # Destructuring matchers:
-  - [ ] array + len
-  - [ ] array + rest
-  - [ ] array + let rest
+  - [x] array + len
+  - [x] array + rest
+  - [x] array + let rest
 
-  - [ ] object + len
-  - [ ] object + rest
-  - [ ] object + let rest
+  - [x] object
+  - [x] object + let rest
 
-  - [ ] binding matchers
+  - [x] binding matchers
 
 # Value-testing matchers:
 

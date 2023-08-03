@@ -218,6 +218,7 @@ export default {
   PatternHasAccessor: "Object pattern can't contain getter or setter.",
   PatternHasMethod: "Object pattern can't contain methods.",
   CannotCombineBooleanMatching: "TODO: CannotCombineBooleanMatching.",
+  RestNeedsLetMatchingObject: "TODO: RestNeedsLetMatchingObject.",
   PrivateInExpectedIn: ({ identifierName }: { identifierName: string }) =>
     `Private names are only allowed in property accesses (\`obj.#${identifierName}\`) or in \`in\` expressions (\`#${identifierName} in obj\`).`,
   PrivateNameRedeclaration: ({ identifierName }: { identifierName: string }) =>
