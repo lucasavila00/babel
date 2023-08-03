@@ -539,7 +539,8 @@ export type BinaryOperator =
   | "^"
   | "&"
   | "in"
-  | "instanceof";
+  | "instanceof"
+  | "is";
 
 export interface AssignmentExpression extends NodeBase {
   type: "AssignmentExpression";
@@ -570,6 +571,15 @@ export interface LogicalExpression extends NodeBase {
 }
 
 export type LogicalOperator = "||" | "&&";
+
+export type MatchPattern = NumericLiteral;
+
+export interface IsExpression extends NodeBase {
+  type: "IsExpression";
+  operator: "is";
+  left: Expression;
+  right: MatchPattern;
+}
 
 export interface SpreadElement extends NodeBase {
   type: "SpreadElement";

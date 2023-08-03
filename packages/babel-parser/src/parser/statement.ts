@@ -53,7 +53,7 @@ export const enum ParseStatementFlag {
 
 const loneSurrogate = /[\uD800-\uDFFF]/u;
 
-const keywordRelationalOperator = /in(?:stanceof)?/y;
+const keywordRelationalOperator = /is|(in(?:stanceof)?)/y;
 
 /**
  * Convert tokens for backward Babel 7 compat.

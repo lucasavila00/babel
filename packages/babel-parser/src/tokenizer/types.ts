@@ -239,6 +239,7 @@ export const tt = {
   // start: isLiteralPropertyName
   // start: isKeyword
   _in: createKeyword("in", { beforeExpr, binop: 7 }),
+  _is: createKeyword("is", { beforeExpr, binop: 7 }),
   _instanceof: createKeyword("instanceof", { beforeExpr, binop: 7 }),
   // end: isBinop
   _break: createKeyword("break"),
@@ -303,7 +304,6 @@ export const tt = {
   _implements: createKeywordLike("implements", { startsExpr }),
   _intrinsic: createKeywordLike("intrinsic", { startsExpr }),
   _infer: createKeywordLike("infer", { startsExpr }),
-  _is: createKeywordLike("is", { startsExpr }),
   _mixins: createKeywordLike("mixins", { startsExpr }),
   _proto: createKeywordLike("proto", { startsExpr }),
   _require: createKeywordLike("require", { startsExpr }),

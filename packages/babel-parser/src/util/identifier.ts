@@ -66,6 +66,7 @@ const reservedWordLikeSet = new Set([
   "true",
   "false",
   "in",
+  "is",
   "instanceof",
   "typeof",
   "void",

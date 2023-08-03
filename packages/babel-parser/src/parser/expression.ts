@@ -405,6 +405,39 @@ export default abstract class ExpressionParser extends LValParser {
     return this.parseExprOp(expr, startLoc, -1);
   }
 
+  parsePattern(this: Parser): N.MatchPattern {
+    switch (this.state.type) {
+      // case tt.slash:
+      // case tt.slashAssign:
+      //   this.readRegexp();
+      //   return this.parseRegExpLiteral(this.state.value);
+      case tt.num:
+        return this.parseNumericLiteral(this.state.value);
+      // case tt.bigint:
+      //   return this.parseBigIntLiteral(this.state.value);
+      // case tt.string:
+      //   return this.parseStringLiteral(this.state.value);
+      // case tt._null:
+      //   return this.parseNullLiteral();
+      // case tt._true:
+      //   return this.parseBooleanLiteral(true);
+      // case tt._false:
+      //   return this.parseBooleanLiteral(false);
+      // case tt.name:
+      //   return this.parseIdentifier();
+      // case tt.braceL:
+      //   return this.parseObjectMatchPattern();
+      // case tt.bracketL:
+      //   return this.parseArrayMatchPattern();
+      // case tt.plusMin:
+      //   return this.parseSimpleUnaryExpression();
+      // case tt.bitwiseXOR:
+      //   return this.parseExpressionMatchPattern();
+      default:
+        throw this.unexpected();
+    }
+  }
+
   // Parse binary operators with the operator precedence parsing
   // algorithm. `left` is the left-hand side of the operator.
   // `minPrec` provides context that allows the function to stop and
@@ -439,6 +472,7 @@ export default abstract class ExpressionParser extends LValParser {
     }
 
     const op = this.state.type;
+
     if (tokenIsOperator(op) && (this.prodParam.hasIn || !this.match(tt._in))) {
       let prec = tokenOperatorPrecedence(op);
       if (prec > minPrec) {
@@ -449,9 +483,9 @@ export default abstract class ExpressionParser extends LValParser {
           }
           this.checkPipelineAtInfixOperator(left, leftStartLoc);
         }
-        const node = this.startNodeAt<N.LogicalExpression | N.BinaryExpression>(
-          leftStartLoc,
-        );
+        const node = this.startNodeAt<
+          N.LogicalExpression | N.BinaryExpression | N.IsExpression
+        >(leftStartLoc);
         node.left = left;
         node.operator = this.state.value;
 
@@ -477,11 +511,22 @@ export default abstract class ExpressionParser extends LValParser {
           }
         }
 
-        node.right = this.parseExprOpRightExpr(op, prec);
-        const finishedNode = this.finishNode(
-          node,
-          logical || coalesce ? "LogicalExpression" : "BinaryExpression",
-        );
+        let finishedNode:
+          | N.LogicalExpression
+          | N.BinaryExpression
+          | N.IsExpression;
+
+        if (op === tt._is) {
+          node.right = this.parseExprOpRightExpr(op, prec);
+          finishedNode = this.finishNode(node, "IsExpression");
+        } else {
+          node.right = this.parseExprOpRightExpr(op, prec);
+          finishedNode = this.finishNode(
+            node,
+            logical || coalesce ? "LogicalExpression" : "BinaryExpression",
+          );
+        }
+
         /* this check is for all ?? operators
          * a ?? b && c for this example
          * when op is coalesce and nextOp is logical (&&), throw at the pos of nextOp that it can not be mixed.
