@@ -431,11 +431,56 @@ export default abstract class ExpressionParser extends LValParser {
       //   return this.parseArrayMatchPattern();
       // case tt.plusMin:
       //   return this.parseSimpleUnaryExpression();
-      // case tt.bitwiseXOR:
+      case tt.parenL: {
+        this.next();
+        const node = this.parseCombinedPattern(undefined);
+        const didEat = this.eat(tt.parenR);
+        if (!didEat) {
+          this.raise(Errors.UnexpectedToken, { at: node });
+        }
+        return node;
+      }
+      case tt.name: {
+        if (this.state.value === "not") {
+          this.next();
+          const node = this.startNodeAt<N.MatchNotPattern>(this.state.startLoc);
+          const right = this.parseCombinedPattern(undefined);
+          node.argument = right;
+          return this.finishNode(node, "MatchNotPattern");
+        }
+      }
       //   return this.parseExpressionMatchPattern();
       default:
         throw this.unexpected();
     }
+  }
+
+  parseCombinedPattern(
+    this: Parser,
+    boolMatcherFound: "and" | "or" | undefined,
+  ): N.MatchPattern {
+    const left = this.parsePattern();
+    const op = this.state.type;
+
+    if (op === tt.name) {
+      const value = this.state.value;
+      if (value === "or" || value === "and") {
+        if (boolMatcherFound != null && boolMatcherFound != value) {
+          this.raise(Errors.CannotCombineBooleanMatching, {
+            at: left,
+          });
+        }
+        this.next();
+        const node = this.startNodeAt<N.BooleanMatcher>(this.state.startLoc);
+        const right = this.parseCombinedPattern(value);
+        node.left = left;
+        node.right = right;
+        node.operator = value;
+        return this.finishNode(node, "BooleanMatcher");
+      }
+    }
+
+    return left;
   }
 
   // Parse binary operators with the operator precedence parsing
@@ -517,7 +562,7 @@ export default abstract class ExpressionParser extends LValParser {
           | N.IsExpression;
 
         if (op === tt._is) {
-          node.right = this.parseExprOpRightExpr(op, prec);
+          node.right = this.parseCombinedPattern(undefined);
           finishedNode = this.finishNode(node, "IsExpression");
         } else {
           node.right = this.parseExprOpRightExpr(op, prec);

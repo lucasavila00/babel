@@ -572,7 +572,20 @@ export interface LogicalExpression extends NodeBase {
 
 export type LogicalOperator = "||" | "&&";
 
-export type MatchPattern = NumericLiteral;
+export type BooleanMatcherOperator = "and" | "or";
+export interface BooleanMatcher extends NodeBase {
+  type: "BooleanMatcher";
+  left: MatchPattern;
+  right: MatchPattern;
+  operator: BooleanMatcherOperator;
+}
+
+export interface MatchNotPattern extends NodeBase {
+  type: "MatchNotPattern";
+  argument: MatchPattern;
+}
+
+export type MatchPattern = NumericLiteral | MatchNotPattern | BooleanMatcher;
 
 export interface IsExpression extends NodeBase {
   type: "IsExpression";
