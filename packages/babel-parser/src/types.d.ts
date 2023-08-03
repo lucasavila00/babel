@@ -585,7 +585,16 @@ export interface MatchNotPattern extends NodeBase {
   argument: MatchPattern;
 }
 
-export type MatchPattern = NumericLiteral | MatchNotPattern | BooleanMatcher;
+export type MatchPattern =
+  | NumericLiteral
+  | MatchNotPattern
+  | BooleanMatcher
+  | UnaryExpression
+  | BigIntLiteral
+  | StringLiteral
+  | NullLiteral
+  | BooleanLiteral
+  | Identifier;
 
 export interface IsExpression extends NodeBase {
   type: "IsExpression";

@@ -405,6 +405,28 @@ export default abstract class ExpressionParser extends LValParser {
     return this.parseExprOp(expr, startLoc, -1);
   }
 
+  parseSimpleUnaryExpression(): N.UnaryExpression {
+    const node = this.startNode<N.UnaryExpression>();
+    node.operator = this.state.value;
+    this.next(); // skip operator (+/-)
+    node.prefix = true;
+    switch (this.state.type) {
+      case tt.num:
+        node.argument = this.parseNumericLiteral(this.state.value);
+        break;
+      case tt.bigint:
+        node.argument = this.parseBigIntLiteral(this.state.value);
+        break;
+      default:
+        if (this.isContextual(Infinity)) {
+          node.argument = this.parseIdentifier();
+          break;
+        }
+        throw this.unexpected();
+    }
+    return this.finishNode(node, "UnaryExpression");
+  }
+
   parsePattern(this: Parser): N.MatchPattern {
     switch (this.state.type) {
       // case tt.slash:
@@ -413,24 +435,22 @@ export default abstract class ExpressionParser extends LValParser {
       //   return this.parseRegExpLiteral(this.state.value);
       case tt.num:
         return this.parseNumericLiteral(this.state.value);
-      // case tt.bigint:
-      //   return this.parseBigIntLiteral(this.state.value);
-      // case tt.string:
-      //   return this.parseStringLiteral(this.state.value);
-      // case tt._null:
-      //   return this.parseNullLiteral();
-      // case tt._true:
-      //   return this.parseBooleanLiteral(true);
-      // case tt._false:
-      //   return this.parseBooleanLiteral(false);
-      // case tt.name:
-      //   return this.parseIdentifier();
+      case tt.bigint:
+        return this.parseBigIntLiteral(this.state.value);
+      case tt.string:
+        return this.parseStringLiteral(this.state.value);
+      case tt._null:
+        return this.parseNullLiteral();
+      case tt._true:
+        return this.parseBooleanLiteral(true);
+      case tt._false:
+        return this.parseBooleanLiteral(false);
       // case tt.braceL:
       //   return this.parseObjectMatchPattern();
       // case tt.bracketL:
       //   return this.parseArrayMatchPattern();
-      // case tt.plusMin:
-      //   return this.parseSimpleUnaryExpression();
+      case tt.plusMin:
+        return this.parseSimpleUnaryExpression();
       case tt.parenL: {
         this.next();
         const node = this.parseCombinedPattern(undefined);
@@ -448,6 +468,7 @@ export default abstract class ExpressionParser extends LValParser {
           node.argument = right;
           return this.finishNode(node, "MatchNotPattern");
         }
+        return this.parseIdentifier();
       }
       //   return this.parseExpressionMatchPattern();
       default:
